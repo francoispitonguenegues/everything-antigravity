@@ -1,6 +1,6 @@
 # ECC → Antigravity — Guide de mise en œuvre
 
-> Compilateur agentique qui transforme la bibliothèque [Everything Claude Code](https://github.com/anthropics/everything-claude-code) en un environnement de développement autonome pour l'IDE Google Antigravity.
+> Compilateur agentique qui transforme la bibliothèque [Everything Claude Code](https://github.com/affaan-m/everything-claude-code) en un environnement de développement autonome pour l'IDE Google Antigravity.
 
 ---
 
@@ -56,7 +56,7 @@ Il ne se contente pas de copier des fichiers — il **analyse**, **transforme** 
 
 ```bash
 # Cloner la bibliothèque EA
-git clone https://github.com/anthropics/everything-claude-code.git
+git clone https://github.com/affaan-m/everything-claude-code.git
 
 # Vérifier la structure attendue
 ls everything-claude-code/
