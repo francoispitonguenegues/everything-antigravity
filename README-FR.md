@@ -55,7 +55,7 @@ Il ne se contente pas de copier des fichiers — il **analyse**, **transforme** 
 ### Fichiers source
 
 ```bash
-# Cloner la bibliothèque EA
+# Cloner la bibliothèque ECC
 git clone https://github.com/affaan-m/everything-claude-code.git
 
 # Vérifier la structure attendue
@@ -319,7 +319,7 @@ Affiche :
 .agents/scripts/ea-logger tail            # Flux en temps réel
 .agents/scripts/ea-logger view 50         # 50 dernières entrées
 .agents/scripts/ea-logger stats           # Statistiques du jour
-.agents/scripts/ea-logger level [level]   # Voir ou changer le niveau (silent/info/debug)
+.agents/scripts/ea-logger level [level]   # Voir ou changer le niveau (silent/info)
 .agents/scripts/ea-logger clear           # Archiver et vider
 ```
 
