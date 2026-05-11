@@ -927,7 +927,7 @@ automatiquement :
 
 ---
 
-# 4 — Exemple pas à pas : application Spring Boot de base de connaissance
+# 4 — Exemple pas à pas : application Spring Boot de base de connaissance *(🚧 Travaux en cours)*
 
 Ce deuxième exemple approfondit la mise en œuvre du cadre agentique en couvrant
 **un maximum de skills, workflows, rules, hooks et pipelines**. Nous construisons
