@@ -901,7 +901,9 @@ automatically:
 
 ---
 
-# 4 — Step-by-step example: Spring Boot knowledge base application *(🚧 Work in progress)*
+# 4 — Step-by-step example: Spring Boot knowledge base application
+
+> 🚧 **Work in progress**
 
 This second example deepens the agentic framework implementation by covering
 **as many skills, workflows, rules, and hooks as possible**. We build a
