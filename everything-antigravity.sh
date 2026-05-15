@@ -603,336 +603,90 @@ else
 fi
 
 # =============================================
-# OBJECTIVE 3 — Token Optimization
+# OBJECTIVE 3 — Caveman Skills Install (--optimize)
 # =============================================
 #
-# Transposition of ECC Token Optimization concepts for Antigravity:
-#   - Estimate token cost per prompt file
-#   - Score structural quality (10 criteria)
-#   - Compress: remove noise without losing instructions
-#   - Detect redundancies across the corpus
-#   - Split sections metadata for lazy loading
-#   - Budget alerts for oversized prompts
+# When --optimize is passed:
+#   - Copy every skill directory from <caveman>/skills/ into OUT_DIR/skills/
+#   - Reference the new skills inside .agents/system.md (skill catalog + Operating Principles)
 
-TOKEN_BUDGET=2000      # max recommended tokens per prompt file
-TOKEN_WARN=1500        # warning threshold
-
-# --- Token estimation ---
-# Approximation: ~4 characters per token (GPT/Claude average for English + markdown)
-estimate_tokens() {
-  local file="$1"
-  local chars
-  chars=$(wc -c < "$file")
-  echo $(( chars / 4 ))
-}
-
-# Estimate tokens from a string
-estimate_tokens_str() {
-  echo $(( ${#1} / 4 ))
-}
-
-# --- Structural compression ---
-# Removes noise without losing instructions:
-#   - Consecutive blank lines → single blank line
-#   - Trailing whitespace on every line
-#   - Lines that are only markdown comments (<!-- ... -->)
-#   - Excessive horizontal rules (--- or ***) beyond the first
-compress_prompt() {
-  local file="$1"
-  sed -E \
-    -e 's/[[:space:]]+$//' \
-    -e '/^<!--.*-->$/d' \
-    "$file" \
-    | awk '
-      /^[[:space:]]*$/ { blank++; if (blank <= 1) print; next }
-      { blank=0; print }
-    ' \
-    | awk '
-      /^(---|[*]{3,})$/ { if (hr++ > 0) next }
-      { print }
-    '
-}
-
-# --- Multi-criteria scoring (0-100) ---
-# 10 criteria, each worth 10 points:
-#   1. Has YAML frontmatter (---)
-#   2. Has a clear role/persona definition
-#   3. Has H2+ section structure
-#   4. Has concrete examples or code blocks
-#   5. Defines expected output format
-#   6. Uses action verbs (imperative instructions)
-#   7. Has structured lists (- or 1.)
-#   8. Has references/links to external resources
-#   9. Token efficiency (under budget)
-#  10. No excessive redundancy (duplicate lines < 5%)
-score_prompt() {
-  local file="$1"
-  local score=0
-  local token_count
-  token_count=$(estimate_tokens "$file")
-  local total_lines
-  total_lines=$(wc -l < "$file")
-
-  # 1. Frontmatter
-  head -1 "$file" 2>/dev/null | grep -q '^---$' && score=$((score + 10))
-
-  # 2. Role/persona
-  grep -qiE '(^role:|you are|your role|persona:|act as)' "$file" && score=$((score + 10))
-
-  # 3. Section structure (at least 2 H2 headings)
-  local h2_count
-  h2_count=$(grep -c '^## ' "$file" 2>/dev/null || echo 0)
-  [[ $h2_count -ge 2 ]] && score=$((score + 10))
-
-  # 4. Examples or code blocks
-  grep -qE '(^```|^> Example|^Example:|^e\.g\.|for example)' "$file" && score=$((score + 10))
-
-  # 5. Output format definition
-  grep -qiE '(output|format|response|return):' "$file" && score=$((score + 10))
-
-  # 6. Action verbs (imperative)
-  grep -qiE '^(- )?(analyze|check|verify|ensure|create|generate|review|scan|detect|validate|implement|test|build|run|use|apply)' "$file" && score=$((score + 10))
-
-  # 7. Structured lists
-  grep -qE '^[[:space:]]*(-|\*|[0-9]+\.) ' "$file" && score=$((score + 10))
-
-  # 8. References/links
-  grep -qE '\[.*\]\(.*\)' "$file" && score=$((score + 10))
-
-  # 9. Token efficiency (under budget = 10, under warn = 5, over = 0)
-  if [[ $token_count -le $TOKEN_BUDGET ]]; then
-    score=$((score + 10))
-  elif [[ $token_count -le $(( TOKEN_BUDGET * 2 )) ]]; then
-    score=$((score + 5))
-  fi
-
-  # 10. Redundancy check (duplicate non-empty lines < 5%)
-  if [[ $total_lines -gt 5 ]]; then
-    local unique_lines dup_pct
-    unique_lines=$(grep -v '^[[:space:]]*$' "$file" | sort | uniq | wc -l)
-    local content_lines
-    content_lines=$(grep -cv '^[[:space:]]*$' "$file" || echo 1)
-    if [[ $content_lines -gt 0 ]]; then
-      dup_pct=$(( (content_lines - unique_lines) * 100 / content_lines ))
-      [[ $dup_pct -lt 5 ]] && score=$((score + 10))
-    else
-      score=$((score + 10))
-    fi
-  else
-    score=$((score + 10))
-  fi
-
-  echo "$score"
-}
-
-# --- Actionable suggestions ---
-suggest_improvements() {
-  local file="$1"
-  local slug="$2"
-  local token_count
-  token_count=$(estimate_tokens "$file")
-  local suggestions=0
-
-  # Token budget
-  if [[ $token_count -gt $TOKEN_BUDGET ]]; then
-    echo "  ⚠️  $token_count tokens (budget: $TOKEN_BUDGET) — consider splitting or trimming"
-    suggestions=$((suggestions + 1))
-  elif [[ $token_count -gt $TOKEN_WARN ]]; then
-    echo "  💡 $token_count tokens — approaching budget ($TOKEN_BUDGET)"
-    suggestions=$((suggestions + 1))
-  fi
-
-  # Structural checks
-  if ! head -1 "$file" 2>/dev/null | grep -q '^---$'; then
-    echo "  💡 Add YAML frontmatter (name, description) for better metadata extraction"
-    suggestions=$((suggestions + 1))
-  fi
-
-  if ! grep -qiE '(^role:|you are|persona:)' "$file"; then
-    echo "  💡 Add a clear role/persona definition (e.g., 'You are a...')"
-    suggestions=$((suggestions + 1))
-  fi
-
-  local h2_count
-  h2_count=$(grep -c '^## ' "$file" 2>/dev/null || echo 0)
-  if [[ $h2_count -lt 2 ]]; then
-    echo "  💡 Add H2 sections to structure the prompt (## When to Use, ## Process, ## Output)"
-    suggestions=$((suggestions + 1))
-  fi
-
-  if ! grep -qiE '(output|format|response):' "$file"; then
-    echo "  💡 Define the expected output format"
-    suggestions=$((suggestions + 1))
-  fi
-
-  if ! grep -qE '(^```|^> Example)' "$file"; then
-    echo "  💡 Add concrete examples or code blocks"
-    suggestions=$((suggestions + 1))
-  fi
-
-  # Redundancy
-  local content_lines unique_lines
-  content_lines=$(grep -cv '^[[:space:]]*$' "$file" || echo 0)
-  unique_lines=$(grep -v '^[[:space:]]*$' "$file" | sort | uniq | wc -l)
-  if [[ $content_lines -gt 10 ]]; then
-    local dup_count=$(( content_lines - unique_lines ))
-    if [[ $dup_count -gt 3 ]]; then
-      echo "  ⚠️  $dup_count duplicate lines detected — remove redundancies"
-      suggestions=$((suggestions + 1))
-    fi
-  fi
-
-  if [[ $suggestions -eq 0 ]]; then
-    echo "  ✅ No issues found"
-  fi
-}
-
-# --- Section splitter metadata ---
-# Identifies logical sections in a prompt for potential lazy-loading
-# Writes a .sections.json alongside the prompt file
-generate_sections_metadata() {
-  local file="$1"
-  local dest="$2"
-
-
-  local sections_json="["
-  local first=true
-  local line_num=0
-  local section_name=""
-  local section_start=0
-
-  while IFS= read -r line; do
-    line_num=$((line_num + 1))
-    if [[ "$line" =~ ^##[[:space:]]+(.*) ]]; then
-      # Close previous section
-      if [[ -n "$section_name" ]]; then
-        [[ "$first" = false ]] && sections_json+=","
-        sections_json+="{\"name\":\"$section_name\",\"start\":$section_start,\"end\":$((line_num - 1))}"
-        first=false
-      fi
-      section_name="${BASH_REMATCH[1]}"
-      section_start=$line_num
-    fi
-  done < "$file"
-
-  # Close last section
-  if [[ -n "$section_name" ]]; then
-    [[ "$first" = false ]] && sections_json+=","
-    sections_json+="{\"name\":\"$section_name\",\"start\":$section_start,\"end\":$line_num}"
-  fi
-
-  sections_json+="]"
-
-  # Only write if there are sections
-  if [[ "$sections_json" != "[]" ]]; then
-    echo "$sections_json" > "$dest"
-    record_file "$dest"
-  fi
-}
+SCRIPT_DIR_OBJ3="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CAVEMAN_SKILLS_SRC="$SCRIPT_DIR_OBJ3/caveman/skills"
 
 # =============================================
-# Run the optimization pass (--optimize flag)
+# Run the Caveman install pass (--optimize flag)
 # =============================================
 
 if [[ "$OPTIMIZE" = true ]]; then
   log ""
-  log "⚙️  [Obj.3] Token Optimization pass…"
+  log "🪨  [Obj.3] Caveman skills install pass…"
 
-  OPT_TOTAL_TOKENS=0
-  OPT_TOTAL_SAVED=0
-  OPT_FILE_COUNT=0
-  OPT_OVER_BUDGET=0
-  OPT_REPORT_LINES=()
+  OPT_CAVEMAN_COUNT=0
+  OPT_CAVEMAN_NAMES=()
 
-  # Process all prompt files (agent.md + SKILL.md)
-  for skill_dir in "$OUT_DIR"/skills/*/; do
-    [[ -d "$skill_dir" ]] || continue
+  if [[ ! -d "$CAVEMAN_SKILLS_SRC" ]]; then
+    log "   ⚠️  caveman/skills/ not found at $CAVEMAN_SKILLS_SRC — skipping"
+  else
+    for skill_dir_src in "$CAVEMAN_SKILLS_SRC"/*/; do
+      [[ -d "$skill_dir_src" ]] || continue
 
-    slug=$(basename "$skill_dir")
+      skill_name=$(basename "$skill_dir_src")
+      dest_dir="$OUT_DIR/skills/$skill_name"
+      mkdir -p "$dest_dir"
 
-    # Find the primary prompt file
-    prompt_file=""
-    if [[ -f "$skill_dir/agent.md" ]]; then
-      prompt_file="$skill_dir/agent.md"
-    elif [[ -f "$skill_dir/SKILL.md" ]]; then
-      prompt_file="$skill_dir/SKILL.md"
-    fi
-    [[ -z "$prompt_file" ]] && continue
+      # Copy every file in the skill directory (SKILL.md + any extras)
+      for f in "$skill_dir_src"*; do
+        [[ -f "$f" ]] || continue
+        cp "$f" "$dest_dir/$(basename "$f")"
+        record_file "$dest_dir/$(basename "$f")"
+      done
 
-    OPT_FILE_COUNT=$((OPT_FILE_COUNT + 1))
-
-    # Measure before
-    local_tokens_before=$(estimate_tokens "$prompt_file")
-
-      # Compress
-      tmp_file=$(mktemp "$OUT_DIR/.tmp.XXXXXX")
-      compress_prompt "$prompt_file" > "$tmp_file"
-      mv "$tmp_file" "$prompt_file"
-
-      # Generate section metadata
-      generate_sections_metadata "$prompt_file" "$skill_dir/.sections.json"
-
-    # Measure after
-    local_tokens_after=$(estimate_tokens "$prompt_file")
-    local_saved=$((local_tokens_before - local_tokens_after))
-    OPT_TOTAL_TOKENS=$((OPT_TOTAL_TOKENS + local_tokens_after))
-    OPT_TOTAL_SAVED=$((OPT_TOTAL_SAVED + local_saved))
-
-    # Score
-    local_score=$(score_prompt "$prompt_file")
-
-    # Budget check
-    local_budget_flag=""
-    if [[ $local_tokens_after -gt $TOKEN_BUDGET ]]; then
-      local_budget_flag=" ⚠️"
-      OPT_OVER_BUDGET=$((OPT_OVER_BUDGET + 1))
-    fi
-
-    # Collect for report (format: tokens|score|saved|slug)
-    OPT_REPORT_LINES+=("$(printf '%05d|%03d|%04d|%s%s' "$local_tokens_after" "$local_score" "$local_saved" "$slug" "$local_budget_flag")")
-
-    # Verbose per-file output
-    if [[ "$VERBOSE" = true ]]; then
-      echo ""
-      echo "  📊 $slug — ${local_tokens_after} tokens (saved ${local_saved}) — score: ${local_score}/100${local_budget_flag}"
-      suggest_improvements "$prompt_file" "$slug"
-    fi
-  done
-
-  # --- Summary report ---
-  log ""
-  log "  ────────────────────────────────────────"
-  log "  📋 Token Optimization Report"
-  log "  ────────────────────────────────────────"
-  log "  Files processed:   $OPT_FILE_COUNT"
-  log "  Total tokens:      $OPT_TOTAL_TOKENS (~$(( OPT_TOTAL_TOKENS * 4 / 1024 )) KB)"
-  log "  Tokens saved:      $OPT_TOTAL_SAVED (compression)"
-  log "  Over budget:       $OPT_OVER_BUDGET files (>${TOKEN_BUDGET} tokens)"
-  if [[ $OPT_FILE_COUNT -gt 0 ]]; then
-    log "  Avg tokens/file:   $(( OPT_TOTAL_TOKENS / OPT_FILE_COUNT ))"
-  fi
-  log "  ────────────────────────────────────────"
-
-  # Top 10 largest files
-  if [[ ${#OPT_REPORT_LINES[@]} -gt 0 ]]; then
-    log ""
-    log "  🏋️ Top 10 largest prompts:"
-    printf '%s\n' "${OPT_REPORT_LINES[@]}" | sort -r | head -10 | while IFS='|' read -r tokens score saved slug; do
-      # Remove leading zeros for display
-      tokens=$((10#$tokens))
-      score=$((10#$score))
-      saved=$((10#$saved))
-      printf '     %5d tok  score:%3d/100  saved:%4d  %s\n' "$tokens" "$score" "$saved" "$slug"
+      OPT_CAVEMAN_COUNT=$((OPT_CAVEMAN_COUNT + 1))
+      OPT_CAVEMAN_NAMES+=("$skill_name")
+      log_verbose "  ✅ $skill_name → $dest_dir"
     done
 
-    # Files over budget
-    if [[ $OPT_OVER_BUDGET -gt 0 ]]; then
+    log "   ✅ $OPT_CAVEMAN_COUNT caveman skills installed: ${OPT_CAVEMAN_NAMES[*]}"
+
+    # --- Patch system.md: add caveman skills to catalog + Operating Principles ---
+    SYSTEM_MD="$OUT_DIR/system.md"
+    if [[ -f "$SYSTEM_MD" ]]; then
       log ""
-      log "  🚨 Files over budget ($TOKEN_BUDGET tokens):"
-      printf '%s\n' "${OPT_REPORT_LINES[@]}" | grep '⚠️' | sort -r | while IFS='|' read -r tokens score saved slug; do
-        tokens=$((10#$tokens))
-        printf '     %5d tok  %s\n' "$tokens" "$slug"
-      done
+      log "   📝 Patching $SYSTEM_MD with caveman references…"
+
+      # 1. Append caveman skills to the General category line in the catalog
+      CAVEMAN_LIST=$(IFS=", "; echo "${OPT_CAVEMAN_NAMES[*]}")
+      python3 - "$SYSTEM_MD" "$CAVEMAN_LIST" <<'PY_CAT'
+import sys, re
+path, new_skills = sys.argv[1], sys.argv[2]
+with open(path, 'r') as fh:
+    content = fh.read()
+
+# Append new skill names to the 📦 General category bullet if it exists
+content = re.sub(
+    r'(- \*\*📦 General\*\* \(\d+\): )([^\n]+)',
+    lambda m: m.group(1) + m.group(2).rstrip() + ', ' + new_skills,
+    content,
+    count=1
+)
+
+# Update skill count in the header table
+added = len(new_skills.split(', '))
+content = re.sub(
+    r'(\| Skills \(agents \+ knowledge\) \| )(\d+)( \|)',
+    lambda m: m.group(1) + str(int(m.group(2)) + added) + m.group(3),
+    content,
+    count=1
+)
+
+with open(path, 'w') as fh:
+    fh.write(content)
+print('  ✅ Caveman skills appended to skill catalog in system.md')
+PY_CAT
+
+      record_file "$SYSTEM_MD"
+    else
+      log "   ⚠️  $SYSTEM_MD not found — skipping system.md patch (run after generate_system_prompt)"
     fi
   fi
 fi
@@ -2534,6 +2288,7 @@ You have access to a curated library of specialized skills, workflows, and rules
    - ✅ Correct: `ea-logger log workflow /plan`, `ea-logger log skill jpa-patterns`
    - ❌ Wrong: `ea-logger log response antigravity` — **never use generic placeholders**
    - If no specific skill/workflow is invoked, use the most relevant rule: `ea-logger log rule <rule-name>`
+7. **Caveman-mode**: When token efficiency matters, activate Caveman mode (skill `caveman`). Respond tersely — drop filler, keep full technical substance. Trigger: user says "caveman mode", "less tokens", "be brief", or `/caveman`. Off with: "stop caveman" / "normal mode".
 
 IDENTITY_HEADER
 

@@ -35,7 +35,7 @@ Il ne se contente pas de copier des fichiers — il **analyse**, **transforme** 
 |---|---|
 | **Mapping** | Transpose agents → skills, commands → workflows, rules → rules (aplati) |
 | **Configuration** | Génère la configuration de chaque skill (descriptions, catégories) |
-| **Optimisation** | Compresse les prompts système, score la qualité, segmente |
+| **Caveman** | Installe les skills Caveman et active le principe opérationnel (`--optimize`) |
 | **Sécurité** | Scanne les secrets, audite les permissions, note la posture (grade A→F) |
 | **Intelligence** | Génère hooks, graphe de dépendances, identité agent |
 | **Outillage** | Déploie 5 scripts de maintenance + capacité de mise à jour |
@@ -137,22 +137,25 @@ bash everything-antigravity.sh ./everything-claude-code --verbose
 
 Affiche chaque fichier copié, chaque décision de mapping, et les détails de scoring.
 
-### Mode optimisation
+### Mode Caveman (`--optimize`)
 
 ```bash
 bash everything-antigravity.sh ./everything-claude-code --optimize
 ```
 
-Active le pass d'optimisation des prompts :
-- Compression des instructions système
-- Scoring qualité sur 10 critères
-- Segmentation intelligente du `system.md`
-- Rapport de budget token
+Nécessite un répertoire `caveman/` à côté du script (clone de [caveman](https://github.com/calebconner/caveman)).
+
+Installe le pack de skills Caveman et active son principe opérationnel :
+- Copie tous les répertoires `caveman/skills/*/` dans `.agents/skills/`
+- Ajoute les noms des skills dans le catalogue `📦 General` de `system.md` (avec le compteur mis à jour)
+- Enregistre **Caveman-mode** comme Principe Opérationnel n°7 dans l'identité de l'agent
+
+> **Caveman-mode** réduit l'usage de tokens d'environ 75% en répondant de façon concise tout en conservant la précision technique. Activation : "caveman mode" ou `/caveman` ; désactivation : "stop caveman".
 
 ### Combinaison de flags
 
 ```bash
-# Installation complète, optimisée, avec détection de stack
+# Installation complète avec skills Caveman et détection de stack
 bash everything-antigravity.sh ./everything-claude-code --optimize --project . --verbose
 ```
 
@@ -471,7 +474,7 @@ bash everything-antigravity.sh ./everything-claude-code
 
 | Flag | Description | Exemple |
 |---|---|---|
-| `--optimize` | Active la compression et le scoring des prompts | `bash everything-antigravity.sh ./everything-claude-code --optimize` |
+| `--optimize` | Installe les skills Caveman + active le Principe Opérationnel n°7 | `bash everything-antigravity.sh ./everything-claude-code --optimize` |
 | `--verbose` | Affiche les détails de chaque opération | `bash everything-antigravity.sh ./everything-claude-code --verbose` |
 | `--project <path>` | Détection de stack + destination auto | `bash everything-antigravity.sh ./everything-claude-code --project ./mon-app` |
 | `--output <path>` | Répertoire de sortie explicite (override) | `bash everything-antigravity.sh ./everything-claude-code --output /opt/agent` |
@@ -485,7 +488,7 @@ bash everything-antigravity.sh ./everything-claude-code --verbose
 # Install dans un projet spécifique (détection Symfony + destination auto)
 bash everything-antigravity.sh ./everything-claude-code --project ./mon-app-symfony
 
-# Install de production avec optimisation
+# Install avec skills Caveman + détection de stack projet
 bash everything-antigravity.sh ./everything-claude-code --optimize --project ./mon-app
 
 # Debug d'un problème
